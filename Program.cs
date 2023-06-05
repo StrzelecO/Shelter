@@ -1,17 +1,18 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Runtime.Serialization;
 using System.Text;
+using System.Reflection;
 
 namespace Shelter
 {
-    interface IEatable
+    interface IEater
     {
         public void Eat(int howMuchGrams);
     }
     [Serializable]
-    abstract class Animal : IComparable<Animal>, ICloneable, IEatable
+    abstract class Animal : IComparable<Animal>, ICloneable, IEater
     {
         private string name;
         private int _age;
@@ -49,12 +50,10 @@ namespace Shelter
         {
             return HashCode.Combine(age, weight);
         }
-        public int CompareTo(Animal? other)
+        public int CompareTo(Animal other)
         {
             if (other == null || this == null)
-            {
                 return 1;
-            }
             return index.CompareTo(other.index);
         }
         public class ByNameComparer : IComparer<Animal>
@@ -76,11 +75,10 @@ namespace Shelter
             }
         }
     }
-    //Klasa Dog dziedzicząca po Animal
     class Dog : Animal
     {
         private int runningSpeed;
-        public Dog (string name, int age, double weight, int index, int runningSpeed) : base(name, age, weight, index)
+        public Dog(string name, int age, double weight, int index, int runningSpeed) : base(name, age, weight, index)
         {
             this.runningSpeed = runningSpeed;
         }
@@ -102,7 +100,6 @@ namespace Shelter
             return $"{base.ToString()}, RUNNING SPEED: {runningSpeed}km/h";
         }
     }
-    //Klasa Cat dziedzicząca po Animal
     class Cat : Animal
     {
         private int tailLength;
@@ -128,7 +125,6 @@ namespace Shelter
             return $"{base.ToString()}, TAIL LENGTH: {tailLength}cm";
         }
     }
-    //Klasa Shelter reprezentująca schronisko
     class Shelter<T> : IEnumerable where T : Animal
     {
         public string Name;
@@ -139,9 +135,8 @@ namespace Shelter
             this.animalDatabase = animalDatabase;
             Name = name;
         }
-
         [Obsolete("Use NewSort<u> method instead")]
-        public void Sort() //umożliwia sortowanie
+        public void Sort()
         {
             if (animalDatabase == null || animalDatabase.Count == 0)
             {
@@ -149,7 +144,7 @@ namespace Shelter
             }
             animalDatabase.Sort();
         }
-        public void NewSort<U>(U u) where U : IComparer<T> //umożliwia sortowanie, w zależności od typu U
+        public void NewSort<U>(U u) where U : IComparer<T>
         {
             if (animalDatabase == null || animalDatabase.Count == 0)
             {
@@ -157,11 +152,11 @@ namespace Shelter
             }
             animalDatabase.Sort(u);
         }
-        public Animal SearchAnimal(int index) //umożliwia wyszukanie zwierzęcia po numerze indeksu
+        public Animal SearchAnimal(int index)
         {
             if (index < 0)
                 throw new ShelterDatabaseException("Index must be greater than zero");
-            if(animalDatabase == null || animalDatabase.Count == 0)
+            if (animalDatabase == null || animalDatabase.Count == 0)
             {
                 return null;
             }
@@ -170,21 +165,39 @@ namespace Shelter
                 if (a.Index.CompareTo(index) == 0)
                     return a;
             }
-            return null;     
+            return null;
         }
-        public void Adopt(Animal pet, string ownerName) //umożliwia adopcje zwierzęcia
+        public void Adopt(Animal pet, string ownerName)
         {
             if (animalDatabase.Contains(pet))
             {
                 animalDatabase.Remove((T)pet);
-                if(pet != null)
-                    animalAdopted(this, new AnimalAdoptedEventArgs(pet, ownerName));                             
+                if (pet != null)
+                    animalAdopted(this, new AnimalAdoptedEventArgs(pet, ownerName));
             }
         }
-        public void Serialization(string nazwaPliku)
+        public void DisplayAnimalsNames()
+        {
+            Console.WriteLine("Animals names:");
+            if (animalDatabase != null)
+            {
+                foreach (T animal in animalDatabase)
+                {
+                    Type type = typeof(T);
+                    PropertyInfo nameProperty = type.GetProperty("Name");
+                    if (nameProperty != null)
+                    {
+                        string name = (string)nameProperty.GetValue(animal);
+                        Console.WriteLine(name);
+                    }
+                }
+            }
+        }
+
+        public void Serialize(string fileName)
         {
             BinaryFormatter bf = new BinaryFormatter();
-            FileStream fs = new FileStream(nazwaPliku, FileMode.OpenOrCreate, FileAccess.Write);
+            FileStream fs = new FileStream(fileName, FileMode.OpenOrCreate, FileAccess.Write);
             try
             {
                 foreach (Animal a in animalDatabase)
@@ -201,11 +214,11 @@ namespace Shelter
                 fs.Close();
             }
         }
-        public List<Animal> Deserialization(string nazwaPliku)
+        public List<Animal> Deserialize(string fileName)
         {
             List<Animal> temp = new List<Animal>();
             BinaryFormatter bf = new BinaryFormatter();
-            FileStream fs = new FileStream(nazwaPliku, FileMode.OpenOrCreate, FileAccess.Read);
+            FileStream fs = new FileStream(fileName, FileMode.OpenOrCreate, FileAccess.Read);
             try
             {
                 foreach (Animal a in animalDatabase)
@@ -239,7 +252,7 @@ namespace Shelter
         {
             return new ShelterEnumerator(animalDatabase);
         }
-        private class ShelterEnumerator : IEnumerator 
+        private class ShelterEnumerator : IEnumerator
         {
             private List<T> animalDatabase;
             private int currentIndex = -1;
@@ -277,9 +290,9 @@ namespace Shelter
             this.ownerName = ownerName;
         }
         public string OwnerName { get => ownerName; }
-        internal Animal Animal { get => animal; }
+        public Animal Animal { get => animal; }
     }
-    class InformationBoard //Tablica informacyjna
+    class InformationBoard
     {
         StringBuilder sb;
         public InformationBoard(StringBuilder sb)
@@ -287,12 +300,12 @@ namespace Shelter
             this.sb = sb;
             sb.AppendLine("INFORMATION BOARD");
         }
-        public void InformAboutAdoption(object sender, AnimalAdoptedEventArgs e) //zapisuje na tablicy informacje o adopcji
+        public void InformAboutAdoption(object sender, AnimalAdoptedEventArgs e)
         {
             Shelter<Animal> s = (Shelter<Animal>)sender;
             sb.AppendLine($"Good news! {e.Animal.Name} was adopted by {e.OwnerName} from {s.Name} shelter!");
         }
-        public void Read() //umożliwiająca odczytanie tablicy
+        public void Read()
         {
             Console.WriteLine(sb.ToString());
         }
@@ -304,7 +317,7 @@ namespace Shelter
             {
                 sb.AppendLine(sr.ReadToEnd());
             }
-            catch (Exception e)
+            catch (IOException e)
             {
                 Console.WriteLine($"Failed to add informations. Reason: {e.Message}");
             }
@@ -312,13 +325,13 @@ namespace Shelter
             {
                 fs.Close();
             }
-        }   
+        }
     }
     class Program
     {
         static void Main(string[] args)
         {
-            //Utworzenie listy zwierząt
+            //Create list of animals
             Dog d1 = new Dog("Odie", 2, 1.3, 1111, 19);
             Dog d2 = new Dog("Goofy", 4, 1.4, 2222, 18);
             Dog d3 = new Dog("Saba", 3, 3.2, 3333, 28);
@@ -334,15 +347,16 @@ namespace Shelter
             animals.Add(c2);
             animals.Add(c3);
             animals.Add(c4);
-     
-            //Stworzenie schroniska i dodanie do niego utworzonej listy zwierząt
-            Shelter<Animal> shelter = new Shelter<Animal>("'Four Paws'",animals);
 
-            //Wyświetlanie informacji na ekran oraz sortowanie - sprawdzenie IComparable i IEnumerable
-            Console.WriteLine(shelter);
+            //Create instance of shelter
+            Shelter<Animal> shelter = new Shelter<Animal>("'Four Paws'", animals);
+
+            shelter.DisplayAnimalsNames();
+
+            //Display informations after sort (IComparable and IEnumerable)
             shelter.Sort();
 
-            Console.WriteLine("Animals sorted by age:");
+            Console.WriteLine("\nAnimals sorted by age:");
             shelter.NewSort(new Animal.ByAgeComparer());
             Console.WriteLine(shelter);
 
@@ -350,19 +364,16 @@ namespace Shelter
             shelter.NewSort(new Animal.ByNameComparer());
             Console.WriteLine(shelter);
 
-            //Stworzenie tablicy informacyjnej i podpięcie pod zdarzenie
+            //Create instance of information board
             InformationBoard informationBoard = new InformationBoard(new StringBuilder(500));
             shelter.animalAdopted += informationBoard.InformAboutAdoption;
-            
-            //Adopcja zwięrzątka
+
+            //Animal adoption
             shelter.Adopt(d1, "Jan Kowalski");
             shelter.Adopt(c3, "Maja Nowak");
 
-            //Oczytanie informacji o adopcjach z tablicy informacyjnej
+            //Display (read) information contained in information board
             informationBoard.Read();
-
-            //informationBoard.AddInfo(@"C:\");
-            //informationBoard.Read();
         }
     }
 }
